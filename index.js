@@ -137,7 +137,12 @@ client.on('messageCreate', async (message) => {
   // console.log("responding to message")
   // mute roulette
   if (message.author.id == "1009080658246774784") return; // don't mute self
-  if (message.channel.id === "1162397077112897648") {
+  const mutePairs = [{receive:"1162397077112897648", log:"1162836582697549874"},
+                     {receive:"1165438519146205244", log:"1165438540897861693"}]
+  let mutePairIdx = mutePairs.findIndex((obj)=>{
+    return obj.receive == message.channel.id;
+  });
+  if (mutePairIdx >= 0) {
     let rand = Math.random();
     let duration = 0;
     if (rand < 1/100) duration = 7*24*60*60;
@@ -154,23 +159,24 @@ client.on('messageCreate', async (message) => {
       }
       else await message.react("<:errorbutgreen:1148666149458939966>");
       // send message in channel with ID 1162836582697549874
-      client.channels.cache.get("1162836582697549874")
+      client.channels.cache.get(mutePairs[mutePairIdx].log)
       .send({content:"<:confirm:1036758071034269706> <@"+message.author.id+"> has been "+
             (duration == 0?"spared from the mute!":"muted for "+ formatTime(duration*1000)),
              flags: [ 4096 ]});
     } catch(e) 
     {
-      console.log(e.message);
       await message.react("<:error:1036760956388265984>");
-      client.channels.cache.get("1162836582697549874")
+      client.channels.cache.get(mutePairs[mutePairIdx].log)
       .send({content:"<:error:1036760956388265984> Error occured while muting <@"+message.author.id+">",
              flags: [ 4096 ]});
     }
     // send messag in the channel
     // console.log("response complete");
+    return;
   }
   // originality channel
-  if (message.channel.id === "1163233406029676554") 
+  if (message.channel.id === "1163233406029676554"
+     || message.channel.id === "1165438425814548480") 
   // if (false)
   {
     let originality = await db.get("msgContent-"+message.content)
@@ -184,16 +190,16 @@ client.on('messageCreate', async (message) => {
         console.log("ready to delete")
         await message.delete();
         console.log("ready to send")
-        await client.channels.cache.get("1163233406029676554")
+        await message.channel
         .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
-              message.content+"` was not original"+(originality>1?"- in fact it's been said "+(-originality)+" times":""));
+              message.content+"` was not original "+(originality<-1?"- in fact it's been said "+(-originality)+" times":""));
       } catch(e) 
       {  
         // console.log(e);
-        await client.channels.cache.get("1163233406029676554")
+        await message.channel
         .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
               message.content+"` was not original");
-        await client.channels.cache.get("1163233406029676554")
+        await message.channel
         .send("<:error:1036760956388265984> Failed to mute user ")
                 // "<@"+message.user.id+">"); 
       }
@@ -202,7 +208,8 @@ client.on('messageCreate', async (message) => {
     else await db.set("msgContent-"+message.content, -1);
   }
   // counting
-  if (message.channel.id === "1164684168924508170") 
+  if (message.channel.id === "1164684168924508170"
+     || message.channel.id == "1165438441102786602") 
   // if (false)
   {
     
@@ -212,20 +219,19 @@ client.on('messageCreate', async (message) => {
     if (message.author.id == lastToCount) 
     {
       await message.delete();
-      sendChannel("1164684168924508170", 
+      sendChannel(message.channel.id, 
             "<:error:1036760956388265984> <@"+message.author.id+"> Let somebody else count!");
       return;
     }
-    lastToCount = message.author.id;
     // for (let i=0; i<numberEmotes.length; i++) 
     // {
       // message.content.replaceAll(numberEmotes[i], i);
     // }
     message.content = message.content.replaceAll(/^0+/gi, "");
     console.log(message.content);
-    let currNum = await db.get("countingNum");
+    let currNum = await db.get("countingNum-"+message.channel.id);
     if (!currNum) {
-      await db.set("countingNum", 1);
+      await db.set("countingNum-"+message.channel.id, 1);
       currNum = 1;
     }
     let wordified = wordify(currNum);
@@ -235,15 +241,17 @@ client.on('messageCreate', async (message) => {
        || (message.content.trim() == currNum)
        || (message.content.trim() == romanNumeralised)) {
       currNum++;
-      await db.set("countingNum", currNum);
+      await db.set("countingNum-"+message.channel.id, currNum);
       await message.react("<:confirm:1036758071034269706>");
+      lastToCount = message.author.id;
     }
     else {
       console.log("ready to delete")
       await message.delete();
       console.log("ready to send")
-      sendChannel("1164684168924508170", "<:error:1036760956388265984> <@"+message.author.id+"> You miscounted! "+
-                  "The next number is "+wordify(currNum)+"."+
+      let outFormats = [wordified, romanNumeralised, currNum];
+      sendChannel(message.channel.id, "<:error:1036760956388265984> <@"+message.author.id+"> You miscounted! "+
+                  "The next number is "+outFormats[Math.floor(Math.random()*3)]+"."+
                   "\n Start your message with a `>` to send comments in this channel.")
     }
   }
