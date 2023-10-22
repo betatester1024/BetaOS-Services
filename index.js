@@ -1,3 +1,5 @@
+///<reference path="database.js"/>
+
 // const loopy = require('./commands/wordle.js')
 const token =    process.env['token'];
 const guildId = ['911997443179151461', '904916856010326036', '1082162409365585920', '1019943441104375839'];
@@ -5,8 +7,10 @@ const clientId = process.env['clientId'];
 
 const { Client, Events, GatewayIntentBits, REST, Routes } = require('discord.js');
 const fs = require('node:fs');
-const Database = require("@replit/database");
-const db = new Database();
+// const Database = require("@replit/database");
+// const db = new Database();
+
+// import {connectDB} from './database';
 // moule.exports = 
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, 
@@ -17,6 +21,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds,
 client.once(Events.ClientReady, c => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
 });
+
 
 function RN(n) 
 {
@@ -179,10 +184,11 @@ client.on('messageCreate', async (message) => {
      || message.channel.id === "1165438425814548480") 
   // if (false)
   {
-    let originality = await db.get("msgContent-"+message.content)
+    let originalityObj = await db.findOne({fieldName:"msgContent", content:message.content});
+    let originality = originalityObj?originalityObj.count:0;
     // if (!originality) return;i
     if (message.attachments.size > 0 || message.embeds.size > 0) return;
-    if (originality) {
+    if (originality > 0) {
       try {
         console.log("ready to timeout")
         // check if member has management roles
@@ -192,7 +198,7 @@ client.on('messageCreate', async (message) => {
         console.log("ready to send")
         await message.channel
         .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
-              message.content+"` was not original "+(originality<-1?"- in fact it's been said "+(-originality)+" times":""));
+              message.content+"` was not original "+(originality>1?"- in fact it's been said "+(originality)+" times":""));
       } catch(e) 
       {  
         // console.log(e);
@@ -203,9 +209,10 @@ client.on('messageCreate', async (message) => {
         .send("<:error:1036760956388265984> Failed to mute user ")
                 // "<@"+message.user.id+">"); 
       }
-      await db.set("msgContent-"+message.content, originality-1);
+      await db.updateOne({fieldName:"msgContent", content:message.content},
+                         {$inc:{count:1}});
     }
-    else await db.set("msgContent-"+message.content, -1);
+    else await db.insertOne({fieldName:"msgContent", content:message.content, count:1});
   }
   // counting
   if (message.channel.id === "1164684168924508170"
@@ -229,9 +236,10 @@ client.on('messageCreate', async (message) => {
     // }
     message.content = message.content.replaceAll(/^0+/gi, "");
     console.log(message.content);
-    let currNum = await db.get("countingNum-"+message.channel.id);
+    let currNumObj = await db.findOne({fieldName:"countingNum", cID:message.channel.id});
+    let currNum = currNumObj?currNumObj.count:null;
     if (!currNum) {
-      await db.set("countingNum-"+message.channel.id, 1);
+      await db.insertOne({fieldName:"countingNum", cID:message.channel.id, count:1});
       currNum = 1;
     }
     let wordified = wordify(currNum);
@@ -240,8 +248,8 @@ client.on('messageCreate', async (message) => {
         wordified.trim().replaceAll(/(-| )/gi, "")
        || (message.content.trim() == currNum)
        || (message.content.trim() == romanNumeralised)) {
-      currNum++;
-      await db.set("countingNum-"+message.channel.id, currNum);
+      await db.updateOne({fieldName:"countingNum", cID:message.channel.id},
+                         {$inc:{count:1}});
       await message.react("<:confirm:1036758071034269706>");
       lastToCount = message.author.id;
     }
@@ -262,33 +270,66 @@ for (const file of fs.readdirSync('./commands').filter(file => file.endsWith('.j
   let command = require(`./commands/${file}`);
   client.commands[command.name] = command;
   client.commands["accessadmin"] = 
-    {
-      name: 'accessadmin',
-      description: 'Enter your OTC to access administrative powers',
-      options: [
-        {
-          type: 3,
-          name: 'otc',
-          description: 'Enter one-time-code here',
-          required: true
-        }
-      ],
-      async execute(interaction) {
-
-        let code = (interaction.options.data[0].value);
-        if (interaction.guild.id != '911997443179151461') 
-          return interaction.reply("<:error:1036760956388265984> Error: You are not in Betatestingland.")
-        if (code == process.env['OTC'] && await db.get("OTCExpiredQ") == "no") {
-          // let member = interaction.user;
-          // let guild = client.guilds.cache.get('911997443179151461');
-          let member = interaction.guild.members.cache.get(interaction.user.id); 
-          await db.set("OTCExpiredQ", "yes");
-          member.roles.add("911997857832247356");
-          return interaction.reply("<:active:1036760969591935056> Role granted, <@"+member.id+">!");
-        }
-        else return interaction.reply("<:error:1036760956388265984> Incorrect or expired code");
+  {
+    name: 'accessadmin',
+    description: 'Enter your OTC to access administrative powers',
+    options: [
+      {
+        type: 3,
+        name: 'otc',
+        description: 'Enter one-time-code here',
+        required: true
       }
-    };
+    ],
+    async execute(interaction) {
+
+      let code = (interaction.options.data[0].value);
+      if (interaction.guild.id != '911997443179151461') 
+        return interaction.reply("<:error:1036760956388265984> Error: You are not in Betatestingland.")
+      if (code == process.env['OTC'] && !(await db.findOne({fieldName:"OTCExpiredQ"})).value) {
+        // let member = interaction.user;
+        // let guild = client.guilds.cache.get('911997443179151461');
+        let member = interaction.guild.members.cache.get(interaction.user.id); 
+        await db.updateOne({fieldName:"OTCExpiredQ"}, {$set:{value:true}}, {upsert:true});
+        member.roles.add("911997857832247356");
+        return interaction.reply("<:active:1036760969591935056> Role granted, <@"+member.id+">!");
+      }
+      else return interaction.reply("<:error:1036760956388265984> Incorrect or expired code");
+    }
+  };
+  client.commands ["otcstatus"] = {
+    name: 'otcstatus',
+    description: 'Administrative access OTC status',
+    async execute(interaction) {
+      if ((await db.findOne({fieldName:"OTCExpiredQ"})).value) 
+        return interaction.reply('<:error:1036760956388265984> OTC has expired');
+      else
+        return interaction.reply('<:active:1036760969591935056> OTC is active');
+    }
+  }
+
+  client.commands["setotcstatus"] = 
+  {
+    name: 'setotcstatus',
+    description: 'Set OTC Status',
+    options: [
+      {
+        type: 3,
+        name: 'status',
+        description: 'Set status to...',
+        choices:[{name:"Expired",value:"yes"}, {name:"Active",value:"no"}],
+        required: true
+      }
+    ],
+    async execute(interaction) {
+      if (interaction.user.id == "842822970829439037") {
+        await db.updateOne({fieldName:"OTCExpiredQ"}, {$set:{value:interaction.options.data[0].value=="yes"}}, {upsert:true});
+        return interaction.reply('<:active:1036760969591935056> OTC is '+(interaction.options.data[0].value == "yes"?"expired":"active"));      
+      } 
+      else
+        return interaction.reply('<:error:1036760956388265984> You do not own Betatestingland');
+    }
+  }
   client.commands["eval"] = {
     name: 'eval',
     description: 'Evaluate JS code (Admin only)',
@@ -346,8 +387,8 @@ client.on(Events.InteractionCreate, async interaction => {
 const rest = new REST({ version: '10' }).setToken(token);
 
 (async () => {
-  const Database = require("@replit/database");
-  const db = new Database();
+  // const Database = require("@replit/database");
+  // const db = new Database();
   // await db.set("OTCExpiredQ", "no");
   // for (let i=0; i<guildId.length; i++) {
     try {
@@ -419,3 +460,34 @@ function padWithThreeZeroes(n) {
 function padWithZero(n) {
   return n < 10 ? "0" + n : n;
 }
+
+
+
+const { MongoClient } = require("mongodb");
+
+// Replace the uri string with your connection string.
+const uri = 
+  `mongodb+srv://DiscordLogin:${process.env['DiscordLogin']}@betaos-datacluster00.d8o7x8n.mongodb.net/?retryWrites=true&w=majority`
+  // "mongodb://SystemLogin:"+process.env['dbPwd']+"@ac-rz8jdrl-shard-00-00.d8o7x8n.mongodb.net:27017,ac-rz8jdrl-shard-00-01.d8o7x8n.mongodb.net:27017,ac-rz8jdrl-shard-00-02.d8o7x8n.mongodb.net:27017/?ssl=true&replicaSet=atlas-3yyxq8-shard-0&authSource=admin&retryWrites=true&w=majority";
+  // "mongodb+srv://SystemLogin:"+process.env['dbPwd']+"@betaos-datacluster00.d8o7x8n.mongodb.net/?retryWrites=true&w=majority";
+
+// import {DBConnectFailure} from './index';
+const mClient = new MongoClient(uri)//, { useNewUrlParser: true, useUnifiedTopology: true });
+// const client = cli.connect();
+const db = mClient.db('SystemManager').collection("MainStorage");
+async function connectDB() {
+  try {
+    await mClient.connect();  
+    console.log("Success! Connected to your database.")
+    // console.log(db.updateOne)
+    // clearTimeout(DBConnectFailure)
+    return null;
+  }
+  catch(e) {
+    console.log(e);
+    return e;
+
+  }
+}
+
+connectDB();1
