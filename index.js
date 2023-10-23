@@ -20,6 +20,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds,
 
 client.once(Events.ClientReady, c => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
+  sendChannel("1166088249626861608", "Logged in!")
 });
 
 
@@ -141,7 +142,7 @@ let lastToCount = "nobody";
 client.on('messageCreate', async (message) => {
   // console.log("responding to message")
   // mute roulette
-  if (message.author.id == "1009080658246774784") return; // don't mute self
+  if (message.author.id == process.env["clientId"]) return; // don't mute self
   const mutePairs = [{receive:"1162397077112897648", log:"1162836582697549874"},
                      {receive:"1165438519146205244", log:"1165438540897861693"}]
   let mutePairIdx = mutePairs.findIndex((obj)=>{
@@ -170,10 +171,12 @@ client.on('messageCreate', async (message) => {
              flags: [ 4096 ]});
     } catch(e) 
     {
-      await message.react("<:error:1036760956388265984>");
-      client.channels.cache.get(mutePairs[mutePairIdx].log)
-      .send({content:"<:error:1036760956388265984> Error occured while muting <@"+message.author.id+">",
-             flags: [ 4096 ]});
+      try {
+        await message.react("<:error:1036760956388265984>");
+        client.channels.cache.get(mutePairs[mutePairIdx].log)
+        .send({content:"<:error:1036760956388265984> Error occured while muting <@"+message.author.id+">",
+               flags: [ 4096 ]});
+      } catch(e2){}
     }
     // send messag in the channel
     // console.log("response complete");
@@ -190,29 +193,33 @@ client.on('messageCreate', async (message) => {
     if (message.attachments.size > 0 || message.embeds.size > 0) return;
     if (originality > 0) {
       try {
-        console.log("ready to timeout")
-        // check if member has management roles
-        await message.member.timeout(60000, "message was not original");
         console.log("ready to delete")
         await message.delete();
         console.log("ready to send")
         await message.channel
         .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
               message.content+"` was not original "+(originality>1?"- in fact it's been said "+(originality)+" times":""));
+        await message.member.timeout(60000, "message was not original");
       } catch(e) 
       {  
         // console.log(e);
-        await message.channel
-        .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
-              message.content+"` was not original");
-        await message.channel
-        .send("<:error:1036760956388265984> Failed to mute user ")
-                // "<@"+message.user.id+">"); 
+        // await message.channel
+        // .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
+              // message.content+"` was not original");
+        try {
+          await message.channel
+          .send("<:error:1036760956388265984> Failed to mute user ")
+                  // "<@"+message.user.id+">"); 
+        } catch(e2) {}
       }
       await db.updateOne({fieldName:"msgContent", content:message.content},
                          {$inc:{count:1}});
     }
-    else await db.insertOne({fieldName:"msgContent", content:message.content, count:1});
+    else {
+      try {await message.react("<:confirm:1036758071034269706>");}
+      catch(e) {}
+      await db.insertOne({fieldName:"msgContent", content:message.content, count:1});
+    }
   }
   // counting
   if (message.channel.id === "1164684168924508170"
@@ -225,9 +232,11 @@ client.on('messageCreate', async (message) => {
     if (message.content.match(/^>/)) return;
     if (message.author.id == lastToCount) 
     {
-      await message.delete();
-      sendChannel(message.channel.id, 
-            "<:error:1036760956388265984> <@"+message.author.id+"> Let somebody else count!");
+      try {
+        await message.delete();
+        sendChannel(message.channel.id, 
+              "<:error:1036760956388265984> <@"+message.author.id+"> Let somebody else count!");
+      } catch(e) {}
       return;
     }
     // for (let i=0; i<numberEmotes.length; i++) 
@@ -244,23 +253,29 @@ client.on('messageCreate', async (message) => {
     }
     let wordified = wordify(currNum);
     let romanNumeralised = RN(currNum);
+    let evalNum = evalNum(message.content.trim().toLowerCase());
     if (message.content.toLowerCase().trim().replaceAll(/(-| )/gi, "") == 
         wordified.trim().replaceAll(/(-| )/gi, "")
        || (message.content.trim() == currNum)
-       || (message.content.trim() == romanNumeralised)) {
+       || (message.content.trim() == romanNumeralised)
+       || evalNum == currNum) {
       await db.updateOne({fieldName:"countingNum", cID:message.channel.id},
                          {$inc:{count:1}});
-      await message.react("<:confirm:1036758071034269706>");
+      try {
+        await message.react("<:confirm:1036758071034269706>");
+      } catch(e) {}
       lastToCount = message.author.id;
     }
     else {
       console.log("ready to delete")
-      await message.delete();
-      console.log("ready to send")
-      let outFormats = [wordified, romanNumeralised, currNum];
-      sendChannel(message.channel.id, "<:error:1036760956388265984> <@"+message.author.id+"> You miscounted! "+
-                  "The next number is "+outFormats[Math.floor(Math.random()*3)]+"."+
-                  "\n Start your message with a `>` to send comments in this channel.")
+      try {
+        await message.delete();
+        console.log("ready to send")
+        let outFormats = [wordified, romanNumeralised, currNum];
+        sendChannel(message.channel.id, "<:error:1036760956388265984> <@"+message.author.id+"> You miscounted! "+
+                    "The next number is "+outFormats[Math.floor(Math.random()*3)]+"."+
+                    "\n Start your message with a `>` to send comments in this channel.")
+      } catch(e) {}
     }
   }
 });
@@ -291,7 +306,9 @@ for (const file of fs.readdirSync('./commands').filter(file => file.endsWith('.j
         // let guild = client.guilds.cache.get('911997443179151461');
         let member = interaction.guild.members.cache.get(interaction.user.id); 
         await db.updateOne({fieldName:"OTCExpiredQ"}, {$set:{value:true}}, {upsert:true});
-        member.roles.add("911997857832247356");
+        try {
+          member.roles.add("911997857832247356");
+        }
         return interaction.reply("<:active:1036760969591935056> Role granted, <@"+member.id+">!");
       }
       else return interaction.reply("<:error:1036760956388265984> Incorrect or expired code");
