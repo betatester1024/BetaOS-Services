@@ -20,7 +20,8 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds,
 
 client.once(Events.ClientReady, c => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
-  sendChannel("1166088249626861608", "Logged in!")
+  try {sendChannel("1166088249626861608", "Logged in!")} 
+  catch(e){}
 });
 
 
@@ -115,7 +116,42 @@ function sendChannel(channelID, message) {
   client.channels.cache.get(channelID).send({content:message});
 }
 
+function cleanMessage(what) 
+{
+  // first attempt to parse as numbers
+  what = what.trim().toLowerCase()
+  what = what.replaceAll(/(-| )/gi, "");
+  what = what.replaceAll(/^(zero|0)+/gi, "")
+  what = what.replaceAll(/and/gi, "");
+  what = what.replaceAll(/fucking/gi, ""); 
+  console.log(what);
+  // three hundred and fucking five -> three hundred five
+  // while (extractWord(what)) 
+  return what;
+}
 
+const baseDigits = "0123456789ABCDEF"
+function toBase(n,base) {
+  let digits = [];
+  while (n>0) {
+    digits.push(n%base);
+    n = Math.floor(n/base);
+  }
+  let out = "";
+  for (let i=digits.length-1;i>=0;i--) {
+    out += baseDigits[digits[i]];
+  }
+  return out;
+}
+
+function extractWord(text) 
+{
+  let oneMatch = text.match(/^(zero|one|two|three|four|five|six|seven|eight|nine)/);
+  if (oneMatch) {
+    one = words.indexOf(oneMatch[1]);
+  }
+  // let specialMatch = text.match(/^(eleven|twelve|thirteen|fourteen|)/);
+}
 
 // client.on('messageDelete', async (message) => {
 //   const logs = await message.guild.fetchAuditLogs({
@@ -143,6 +179,7 @@ client.on('messageCreate', async (message) => {
   // console.log("responding to message")
   // mute roulette
   if (message.author.id == process.env["clientId"]) return; // don't mute self
+  if (message.author.bot) return;
   const mutePairs = [{receive:"1162397077112897648", log:"1162836582697549874"},
                      {receive:"1165438519146205244", log:"1165438540897861693"}]
   let mutePairIdx = mutePairs.findIndex((obj)=>{
@@ -161,7 +198,7 @@ client.on('messageCreate', async (message) => {
     try {
       if (duration != 0) { 
         await message.member.timeout(duration*1000, "mute roulette");
-        await message.react("<:confirm:1036758071034269706>");
+        await message.react("<:received:1166425913681002526>");
       }
       else await message.react("<:errorbutgreen:1148666149458939966>");
       // send message in channel with ID 1162836582697549874
@@ -194,7 +231,7 @@ client.on('messageCreate', async (message) => {
     if (originality > 0) {
       try {
         console.log("ready to delete")
-        await message.delete();
+        try {await message.delete();} catch(e) {console.log(e)}// in case the other one deleted first
         console.log("ready to send")
         await message.channel
         .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
@@ -216,7 +253,7 @@ client.on('messageCreate', async (message) => {
                          {$inc:{count:1}});
     }
     else {
-      try {await message.react("<:confirm:1036758071034269706>");}
+      try {await message.react("<:received:1166425913681002526>");}
       catch(e) {}
       await db.insertOne({fieldName:"msgContent", content:message.content, count:1});
     }
@@ -224,11 +261,7 @@ client.on('messageCreate', async (message) => {
   // counting
   if (message.channel.id === "1164684168924508170"
      || message.channel.id == "1165438441102786602") 
-  // if (false)
   {
-    
-    
-    // const numberEmotes = "0️⃣1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣8️⃣9️⃣";
     if (message.content.match(/^>/)) return;
     if (message.author.id == lastToCount) 
     {
@@ -243,7 +276,7 @@ client.on('messageCreate', async (message) => {
     // {
       // message.content.replaceAll(numberEmotes[i], i);
     // }
-    message.content = message.content.replaceAll(/^0+/gi, "");
+
     console.log(message.content);
     let currNumObj = await db.findOne({fieldName:"countingNum", cID:message.channel.id});
     let currNum = currNumObj?currNumObj.count:null;
@@ -253,16 +286,18 @@ client.on('messageCreate', async (message) => {
     }
     let wordified = wordify(currNum);
     let romanNumeralised = RN(currNum);
-    let evalNum = evalNum(message.content.trim().toLowerCase());
-    if (message.content.toLowerCase().trim().replaceAll(/(-| )/gi, "") == 
-        wordified.trim().replaceAll(/(-| )/gi, "")
-       || (message.content.trim() == currNum)
-       || (message.content.trim() == romanNumeralised)
-       || evalNum == currNum) {
+    // let evalNum = eNum(message.content);
+    if (cleanMessage(message.content) == 
+      wordified.trim().replaceAll(/(-| |and)/gi, "")
+     || (message.content== currNum)
+     || (message.content.trim().toUpperCase() == romanNumeralised)
+     || toBase(currNum, 2) == message.content.trim().toUpperCase()
+     || toBase(currNum, 8) == message.content.trim().toUpperCase()
+     || toBase(currNum, 16) == message.content.trim().toUpperCase()) {
       await db.updateOne({fieldName:"countingNum", cID:message.channel.id},
                          {$inc:{count:1}});
       try {
-        await message.react("<:confirm:1036758071034269706>");
+        await message.react("<:received:1166425913681002526>");
       } catch(e) {}
       lastToCount = message.author.id;
     }
@@ -308,7 +343,7 @@ for (const file of fs.readdirSync('./commands').filter(file => file.endsWith('.j
         await db.updateOne({fieldName:"OTCExpiredQ"}, {$set:{value:true}}, {upsert:true});
         try {
           member.roles.add("911997857832247356");
-        }
+        } catch (e) {}
         return interaction.reply("<:active:1036760969591935056> Role granted, <@"+member.id+">!");
       }
       else return interaction.reply("<:error:1036760956388265984> Incorrect or expired code");
@@ -322,6 +357,27 @@ for (const file of fs.readdirSync('./commands').filter(file => file.endsWith('.j
         return interaction.reply('<:error:1036760956388265984> OTC has expired');
       else
         return interaction.reply('<:active:1036760969591935056> OTC is active');
+    }
+  }
+  client.commands["echo"] = {
+    name: 'echo',
+    description: 'Sends the same message.',
+    options: [
+      {
+        type: 3,
+        name: 'otc',
+        description: 'Enter one-time-code here',
+        required: true
+      }
+    ],
+    async execute(interaction) {
+      try {
+        sendChannel(interaction.channel.id, interaction.options.data[0].value);
+        return interaction.reply({content:"<:error:1036760956388265984> Could not send message"})
+      }
+      catch(e) {
+        return interaction.reply({content:"<:active:1036760969591935056> Sent!"})
+      }
     }
   }
 
@@ -365,6 +421,7 @@ for (const file of fs.readdirSync('./commands').filter(file => file.endsWith('.j
       }
     ],
     async execute(interaction) {
+      if (process.env["branch"] != "unstable") return interaction.reply("<:error:1036760956388265984>")
       if (interaction.user.id == "842822970829439037") {
         // await db.set("OTCExpiredQ", interaction.options.data[0].value);
         let reply;
