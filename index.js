@@ -365,18 +365,18 @@ for (const file of fs.readdirSync('./commands').filter(file => file.endsWith('.j
     options: [
       {
         type: 3,
-        name: 'otc',
-        description: 'Enter one-time-code here',
+        name: 'content',
+        description: 'Message to send',
         required: true
       }
     ],
     async execute(interaction) {
       try {
         sendChannel(interaction.channel.id, interaction.options.data[0].value);
-        return interaction.reply({content:"<:error:1036760956388265984> Could not send message"})
+        return interaction.reply({content:"<:active:1036760969591935056> Sent!", ephemeral:true})
       }
       catch(e) {
-        return interaction.reply({content:"<:active:1036760969591935056> Sent!"})
+        return interaction.reply({content:"<:error:1036760956388265984> Could not send message", ephemeral:true})
       }
     }
   }
