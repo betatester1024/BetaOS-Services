@@ -18,9 +18,11 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds,
                                        GatewayIntentBits.MessageContent,
                                        GatewayIntentBits.GuildMembers,] });
 
-client.once(Events.ClientReady, c => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Ready! Logged in as ${c.user.tag}`);
-  try {sendChannel("1166088249626861608", "Logged in!")} 
+  try {
+    await sendChannel("1166088249626861608", "Logged in!")
+  } 
   catch(e){}
 });
 
@@ -112,8 +114,10 @@ function wordify(origN)
   else return millions+thousandWord+hundredWord+tenWord+oneWord;
 }
 
-function sendChannel(channelID, message) {
-  client.channels.cache.get(channelID).send({content:message});
+async function sendChannel(channelID, message) {
+  try {
+    await client.channels.cache.get(channelID).send({content:message});
+  } catch(e) {};
 }
 
 function cleanMessage(what) 
@@ -196,7 +200,7 @@ client.on('messageCreate', async (message) => {
     else duration = 0;
     // timeout author of message for DURATION
     try {
-      if (duration != 0) { 
+      if (duration != 0 && message.author.id != "1093255448297226361") { 
         await message.member.timeout(duration*1000, "mute roulette");
         await message.react("<:received:1166425913681002526>");
       }
@@ -267,7 +271,7 @@ client.on('messageCreate', async (message) => {
     {
       try {
         await message.delete();
-        sendChannel(message.channel.id, 
+        await sendChannel(message.channel.id, 
               "<:error:1036760956388265984> <@"+message.author.id+"> Let somebody else count!");
       } catch(e) {}
       return;
@@ -291,9 +295,9 @@ client.on('messageCreate', async (message) => {
       wordified.trim().replaceAll(/(-| |and)/gi, "")
      || (message.content== currNum)
      || (message.content.trim().toUpperCase() == romanNumeralised)
-     || toBase(currNum, 2) == message.content.trim().toUpperCase()
-     || toBase(currNum, 8) == message.content.trim().toUpperCase()
-     || toBase(currNum, 16) == message.content.trim().toUpperCase()) {
+     || "0b"+toBase(currNum, 2) == message.content.trim().toUpperCase()
+     || "0o"+toBase(currNum, 8) == message.content.trim().toUpperCase()
+     || "0x"+toBase(currNum, 16) == message.content.trim().toUpperCase()) {
       await db.updateOne({fieldName:"countingNum", cID:message.channel.id},
                          {$inc:{count:1}});
       try {
@@ -307,7 +311,7 @@ client.on('messageCreate', async (message) => {
         await message.delete();
         console.log("ready to send")
         let outFormats = [wordified, romanNumeralised, currNum];
-        sendChannel(message.channel.id, "<:error:1036760956388265984> <@"+message.author.id+"> You miscounted! "+
+        await sendChannel(message.channel.id, "<:error:1036760956388265984> <@"+message.author.id+"> You miscounted! "+
                     "The next number is "+outFormats[Math.floor(Math.random()*3)]+"."+
                     "\n Start your message with a `>` to send comments in this channel.")
       } catch(e) {}
@@ -372,7 +376,7 @@ for (const file of fs.readdirSync('./commands').filter(file => file.endsWith('.j
     ],
     async execute(interaction) {
       try {
-        sendChannel(interaction.channel.id, interaction.options.data[0].value);
+        await sendChannel(interaction.channel.id, interaction.options.data[0].value);
         return interaction.reply({content:"<:active:1036760969591935056> Sent!", ephemeral:true})
       }
       catch(e) {
