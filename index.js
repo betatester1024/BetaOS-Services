@@ -1,5 +1,6 @@
 ///<reference path="database.js"/>
-
+const math = require('mathjs');
+// console.log(math.evaluate('12 / (2.3 + 0.7)'));
 // const loopy = require('./commands/wordle.js')
 const token =    process.env['token'];
 const guildId = ['911997443179151461', '904916856010326036', '1082162409365585920', '1019943441104375839'];
@@ -224,46 +225,8 @@ client.on('messageCreate', async (message) => {
     return;
   }
   // originality channel
-  if (message.channel.id === "1163233406029676554"
-     || message.channel.id === "1165438425814548480") 
-  // if (false)
-  {
-    let originalityObj = await db.findOne({fieldName:"msgContent", content:message.content});
-    let originality = originalityObj?originalityObj.count:0;
-    // if (!originality) return;i
-    if (message.attachments.size > 0 || message.embeds.size > 0) return;
-    if (originality > 0) {
-      try {
-        console.log("ready to delete")
-        try {await message.delete();} catch(e) {console.log(e)}// in case the other one deleted first
-        console.log("ready to send")
-        await message.channel
-        .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
-              message.content+"` was not original "+(originality>1?"- in fact it's been said "+(originality)+" times":""));
-        await message.member.timeout(60000, "message was not original");
-      } catch(e) 
-      {  
-        // console.log(e);
-        // await message.channel
-        // .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
-              // message.content+"` was not original");
-        try {
-          await message.channel
-          .send("<:error:1036760956388265984> Failed to mute user ")
-                  // "<@"+message.user.id+">"); 
-        } catch(e2) {}
-      }
-      await db.updateOne({fieldName:"msgContent", content:message.content},
-                         {$inc:{count:1}});
-    }
-    else {
-      try {await message.react("<:received:1166425913681002526>");}
-      catch(e) {}
-      await db.insertOne({fieldName:"msgContent", content:message.content, count:1});
-    }
-  }
   // counting
-  if (message.channel.id === "1164684168924508170"
+  else if (message.channel.id === "1164684168924508170"
      || message.channel.id == "1165438441102786602") 
   {
     if (message.content.match(/^>/)) return;
@@ -297,7 +260,8 @@ client.on('messageCreate', async (message) => {
      || (message.content.trim().toUpperCase() == romanNumeralised)
      || "0b"+toBase(currNum, 2) == message.content.trim().toUpperCase()
      || "0o"+toBase(currNum, 8) == message.content.trim().toUpperCase()
-     || "0x"+toBase(currNum, 16) == message.content.trim().toUpperCase()) {
+     || "0x"+toBase(currNum, 16) == message.content.trim().toUpperCase()
+     || currNum == math.evaluate(message.content.trim().toLowerCase())) {
       await db.updateOne({fieldName:"countingNum", cID:message.channel.id},
                          {$inc:{count:1}});
       try {
@@ -315,6 +279,44 @@ client.on('messageCreate', async (message) => {
                     "The next number is "+outFormats[Math.floor(Math.random()*3)]+"."+
                     "\n Start your message with a `>` to send comments in this channel.")
       } catch(e) {}
+    }
+  }
+  else if (message.channel.id === "1163233406029676554"
+     || message.channel.id === "1165438425814548480")// true) 
+  {
+    if (message.content.length== 0) return;
+    let originalityObj = await db.findOne({fieldName:"msgContent", content:message.content});
+    let originality = originalityObj?originalityObj.count:0;
+    // if (!originality) return;i
+    if (message.attachments.size > 0 || message.embeds.size > 0) return;
+    if (originality > 0) {
+      try {
+        console.log("ready to delete")
+        try {await message.delete();} catch(e) {console.log(e)}// in case the other one deleted first
+        console.log("ready to send")
+        await message.channel
+        .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
+              message.content+"` was not original "+(originality>1?"- in fact it's been said "+(originality)+" times":""));
+        await message.member.timeout(60000, "message was not original");
+      } catch(e) 
+      {  
+        // console.log(e);
+        // await message.channel
+        // .send("<:error:1036760956388265984> <@"+message.author.id+"> Your message of `"+
+              // message.content+"` was not original");
+        try {
+          await message.channel
+          .send("<:error:1036760956388265984> Failed to mute user ")
+                  // "<@"+message.user.id+">"); 
+        } catch(e2) {}
+      }
+      await db.updateOne({fieldName:"msgContent", content:message.content},
+                         {$inc:{count:1}});
+    }
+    else {
+      try {await message.react("<:received:1166425913681002526>");}
+      catch(e) {}
+      await db.insertOne({fieldName:"msgContent", content:message.content, count:1});
     }
   }
 });
